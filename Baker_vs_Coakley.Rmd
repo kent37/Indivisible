@@ -1,0 +1,100 @@
+---
+title: "Charlie Baker vs Martha Coakley, 2014"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    theme: spacelab
+---
+
+```{r parameters, echo=FALSE,include=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo=FALSE,fig.width=10, fig.height=8, comment=NA, warning=FALSE, message=FALSE)
+
+library(htmltools)
+library(leaflet)
+library(maptools)
+library(sp)
+library(stringr)
+library(tidyverse)
+```
+
+```{r data,cache=TRUE}
+# Town shapefile from
+# http://www.mass.gov/anf/research-and-tech/it-serv-and-support/application-serv/office-of-geographic-information-massgis/datalayers/townsurvey.html
+towns = raster::shapefile('townssurvey_shp/TOWNSSURVEY_POLYM.shp')
+towns = spTransform(towns, CRS("+init=EPSG:4326"))
+towns_simp = rmapshaper::ms_simplify(towns)
+# Election results from
+# http://electionstats.state.ma.us/elections/view/35901/
+results = read_csv('PD43+__2014_Governor_General_Election.csv') %>% 
+  select(-X2, -X3) %>% 
+  mutate(TOWN=str_to_upper(`City/Town`) %>% 
+           str_replace('E\\.', 'EAST') %>% 
+           str_replace('W\\.', 'WEST') %>% 
+           str_replace('S\\.', 'SOUTH') %>% 
+           str_replace('N\\.', 'NORTH') %>% 
+           str_replace('MANCHESTER-BY-THE-SEA', 'MANCHESTER')) %>% 
+  filter(TOWN != 'TOTALS')
+
+d = merge(towns_simp, results, by='TOWN')
+
+# Place dots, one per hundred votes
+# Round up so towns with few voters get some dots
+red = dotsInPolys(d, ceiling(d$`Baker/ Polito`/100))
+blue = dotsInPolys(d, ceiling(d$`Coakley/ Kerrigan`/100))
+
+make_popups = function(d) {
+   lapply(1:nrow(d),
+       function(i) {
+         row = d[i,]
+   HTML(as.character(
+     tags$table(tags$caption(strong(row$`City/Town`)),
+     tags$tr(tags$td('Baker'), 
+             tags$td(row$`Baker/ Polito`),
+             tags$td(scales::percent(row$`Baker/ Polito`/row$`Total Votes Cast`))),
+     tags$tr(tags$td('Coakley'), 
+             tags$td(row$`Coakley/ Kerrigan`),
+             tags$td(scales::percent(row$`Coakley/ Kerrigan`/row$`Total Votes Cast`)))
+   )))
+   })
+  }
+
+d$popup = make_popups(d@data)
+```
+
+The Vote
+============
+
+Row
+-----------------------------------------------------------------------
+
+### Votes for Charlie Baker and Martha Coakley, 2014 Massachusetts Gubernatorial Election
+
+```{r}
+leaflet() %>% addPolygons(data=d, label=~`City/Town`, popup=~popup,
+                          color='gray', 
+                          fillColor='#F0F0F0', fillOpacity=1,
+                          weight=1) %>% 
+  addCircleMarkers(data=red, radius=1, stroke=FALSE, 
+                   fillColor='red', fillOpacity=0.5, group='Baker') %>% 
+  addCircleMarkers(data=blue, radius=1, stroke=FALSE, 
+                   fillColor='blue', fillOpacity=0.5, group='Coakley') %>% 
+  addLayersControl(overlayGroups=c('Baker', 'Coakley'))
+```
+
+About
+================
+
+### About this map
+
+This map shows the number of votes received by Charlie Baker and 
+Martha Coakley in the 2014 Massachusetts Gubernatorial Election.
+
+Each dot represents 100 votes. Click on a town for additional information.
+
+Data is from the
+<a href="http://electionstats.state.ma.us/elections/view/35901/" target="_blank">Massachusetts Secretary of the Commonwealth</a>, 
+mapped by Kent S Johnson. 
+
+<span style='float:right;font-style: italic;'>`r Sys.Date()`</span></small>
+  

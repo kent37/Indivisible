@@ -1,0 +1,11 @@
+body {
+      background-color: rgba(27, 63, 105, 0.21);
+}
+
+td, th {
+    padding: 2px;
+}
+
+.leaflet-container {
+    background: rgba(67, 107, 151, 0.48);
+}

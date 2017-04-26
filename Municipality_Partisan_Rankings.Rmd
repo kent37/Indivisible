@@ -1,0 +1,96 @@
+---
+title: "Partisan Ranking of Massachusetts Municipalities"
+output: 
+  flexdashboard::flex_dashboard:
+    self_contained: false
+    lib_dir: Media
+    orientation: rows
+    vertical_layout: fill
+    theme: spacelab
+    css: Media/maps.css
+    navbar:
+      - { icon: "fa-github", href: "https://github.com/kent37/Indivisible", align: right }
+---
+
+```{r parameters, echo=FALSE,include=FALSE,message=FALSE}
+knitr::opts_chunk$set(echo=FALSE,fig.width=10, fig.height=8, comment=NA, warning=FALSE, message=FALSE)
+
+library(glue)
+library(htmltools)
+library(leaflet)
+library(maptools)
+library(scales)
+library(sp)
+library(stringr)
+library(tidyverse)
+```
+
+```{r cache=TRUE}
+# Read towns cartogram (created with ScapeToad http://scapetoad.choros.ch/index.php)
+towns_carto = raster::shapefile('townssurvey_shp/TOWNSSURVEY_POLYM_Cartogram.shp')
+
+# From proj4string(towns)
+proj4string(towns_carto) = "+proj=lcc +lat_1=41.71666666666667 +lat_2=42.68333333333333 +lat_0=41 +lon_0=-71.5 +x_0=200000 +y_0=750000 +datum=NAD83 +units=m +no_defs +ellps=GRS80 +towgs84=0,0,0"
+towns_carto = spTransform(towns_carto, CRS("+init=EPSG:4326"))
+
+towns_carto_simp = rmapshaper::ms_simplify(towns_carto)
+```
+
+Rankings
+============
+
+This map is a <a href="https://en.wikipedia.org/wiki/Cartogram" target="_blank">cartogram</a> showing partisan
+rankings of Massachusetts municipalities. Municipalities are sized by
+2010 population.
+
+Row
+-----------------------------------------------------------------------
+
+### Partisan ranking, by population
+
+```{r}
+# Partisan rankings from 
+# https://fusiontables.google.com/data?docid=1Kfs4Y1IpoPsQhC7SQdHkpItDvSMCx_Sx0hfnPuM#rows:id=1
+ranks = read_csv('MA Municipality Partisan Rankings.csv') %>% 
+  mutate(TOWN=str_to_upper(Town))
+d = merge(towns_carto_simp, ranks)
+
+d$popup = d@data %>% glue_data("<div style='font-family: sans-serif'>
+<font size='+1'><b>{Town}</b></font> Rating: {percent(`New Average`)}<br>
+<b>Governor</b><br>
+Patrick/Healey 2006: {percent(`Diff 2006`)}<br>
+Patrick/Baker 2010: {percent(`GDiff 2010`)}<br>
+<b>President</b><br>
+Obama/McCain 2008: {percent(`Diff 2008`)}<br>
+Obama/Romney 2012: {percent(`PDiff 2012`)}<br>
+<b>Senate</b><br>
+Coakley/Brown 2010: {percent(`SDiff 2010`)}<br>
+Warren/Brown 2012: {percent(`SDiff 2012`)}<br>
+<b>Averages</b><br>
+Pre-2012 Average: {percent(`Old Average`)}<br>
+Average: {percent(`New Average`)}<br>
+</div>") %>% map(HTML)
+
+d$color = cut(d$`New Average`, c(-1, -0.12, 0, 0.1, 0.2, 0.3, 1))
+pal = c('#fc9292','#de2d2d', '#bdd7e7','#6baed6','#3182bd','#08519c')
+leaflet(d) %>% addPolygons(label=~Town, popup=~popup, color='black',
+                           fillColor=~pal[color], fillOpacity=1,
+                           weight=1)
+```
+
+About
+======
+
+Rankings are computed as the average difference between Democratic and
+Republican vote percentages for statewide elections from 2006 to 2012.
+See <a href="http://massnumbers.blogspot.com/2012/11/how-democratic-or-republic-is-my-town.html" target="_blank">How Democratic or Republican is my town?</a> for details of the methodology and
+source for the data.
+
+The map is a 
+<a href="https://en.wikipedia.org/wiki/Cartogram" target="_blank">cartogram</a>
+- the sizes and shapes of municipalities are distorted to reflect the 2010 
+population.
+
+Mapping by Kent S Johnson. 
+
+<span style='float:right;font-style: italic;'>`r Sys.Date()`</span></small>
